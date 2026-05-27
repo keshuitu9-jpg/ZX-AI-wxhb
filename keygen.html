@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>全能画布 - 一机一码算号器</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f4f4f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); width: 400px; }
+    h1 { margin-top: 0; font-size: 1.5rem; color: #18181b; }
+    input { width: 100%; box-sizing: border-box; padding: 12px; margin-bottom: 20px; border: 1px solid #d4d4d8; border-radius: 8px; font-size: 16px; font-family: monospace; }
+    button { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #1d4ed8; }
+    .result { margin-top: 20px; padding: 15px; background: #eff6ff; border: 1px dashed #60a5fa; border-radius: 8px; text-align: center; display: none; }
+    .code { font-size: 24px; font-family: monospace; color: #1e40af; font-weight: bold; user-select: all; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>全能画布 算号器</h1>
+    <p style="color: #71717a; font-size: 14px;">请输入用户的设备机器码：</p>
+    <input type="text" id="deviceId" placeholder="例如: 1A2B-3C4D-5E6F" autocomplete="off" />
+    <button onclick="generate()">生成激活码</button>
+    <div id="resultBox" class="result">
+      <p style="margin: 0 0 10px 0; font-size: 14px; color: #3b82f6;">对应的激活码为：</p>
+      <div id="codeDisplay" class="code"></div>
+    </div>
+  </div>
+
+  <script>
+    const SECRET_SALT = 'STORYBOARD-2026-XW-COPILOT';
+
+    function calculateActivationCode(deviceId) {
+      let hash = 5381;
+      const str = deviceId + SECRET_SALT;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) + hash) + str.charCodeAt(i);
+      }
+      const code = Math.abs(hash).toString(36).toUpperCase();
+      return 'SB-' + code.padStart(8, '0');
+    }
+
+    function generate() {
+      const input = document.getElementById('deviceId').value.trim();
+      if (!input) {
+        alert('请输入机器码！');
+        return;
+      }
+      const code = calculateActivationCode(input);
+      document.getElementById('codeDisplay').innerText = code;
+      document.getElementById('resultBox').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

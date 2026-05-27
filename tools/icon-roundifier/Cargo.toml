@@ -1,0 +1,16 @@
+[package]
+name = "icon-roundifier"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "icon-roundifier"
+path = "src/main.rs"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
+strip = true
