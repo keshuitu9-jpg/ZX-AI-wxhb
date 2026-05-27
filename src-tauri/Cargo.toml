@@ -43,10 +43,12 @@ anyhow = "1.0"
 sha2 = "0.10"
 rsa = "0.9"
 rand = "0.8"
-winreg = "0.52"
 hex = "0.4"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 data-encoding = "2"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
 
 [profile.release]
 opt-level = "z"
