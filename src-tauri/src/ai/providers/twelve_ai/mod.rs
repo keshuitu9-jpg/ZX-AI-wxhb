@@ -959,31 +959,94 @@ impl TwelveAiProvider {
                 })
                 .collect::<Result<Vec<_>, AIError>>()?;
 
-            self.send_with_fallback("sync-edit", |client| {
-                let mut request_form = Form::new()
-                    .text("model", model.to_string())
-                    .text("prompt", request.prompt.clone())
-                    .text("size", size.clone())
-                    .text("quality", quality.clone())
-                    .text("n", "1")
-                    .text("response_format", "url");
+            // 带重试的同步编辑提交
+            let max_retries = 2;
+            let mut last_err: Option<AIError> = None;
+            let mut final_response = None;
 
-                for (i, (_original_index, bytes)) in image_payloads.iter().enumerate() {
-                    let key = "image";
-                    let part = Part::bytes(bytes.clone())
-                        .file_name(format!("{}-{}.jpg", key, i + 1))
-                        .mime_str("image/jpeg")
-                        .expect("Valid hardcoded mime type");
-                    request_form = request_form.part(key, part);
+            for attempt in 0..=max_retries {
+                if attempt > 0 {
+                    info!("[12AI Sync] Retrying edit (attempt {}/{})", attempt + 1, max_retries + 1);
+                    tokio::time::sleep(Duration::from_secs(2)).await;
                 }
 
-                client
-                    .post(&endpoint)
-                    .header("Authorization", format!("Bearer {}", api_key))
-                    .header("Accept", "application/json")
-                    .multipart(request_form)
-            })
-            .await?
+                let resp = self.send_with_fallback("sync-edit", |client| {
+                    let mut request_form = Form::new()
+                        .text("model", model.to_string())
+                        .text("prompt", request.prompt.clone())
+                        .text("size", size.clone())
+                        .text("quality", quality.clone())
+                        .text("n", "1")
+                        .text("response_format", "url");
+
+                    for (i, (_original_index, bytes)) in image_payloads.iter().enumerate() {
+                        let key = "image";
+                        let part = Part::bytes(bytes.clone())
+                            .file_name(format!("{}-{}.jpg", key, i + 1))
+                            .mime_str("image/jpeg")
+                            .expect("Valid hardcoded mime type");
+                        request_form = request_form.part(key, part);
+                    }
+
+                    client
+                        .post(&endpoint)
+                        .header("Authorization", format!("Bearer {}", api_key))
+                        .header("Accept", "application/json")
+                        .multipart(request_form)
+                })
+                .await;
+
+                match resp {
+                    Ok(r) => {
+                        let status = r.status();
+                        let body_bytes = r.bytes().await.map_err(AIError::Network)?;
+                        if !status.is_success() {
+                            let error_text = String::from_utf8_lossy(&body_bytes).to_string();
+                            if (error_text.contains("unexpected EOF") || error_text.contains("connection")) && attempt < max_retries {
+                                last_err = Some(AIError::Provider(error_text));
+                                continue;
+                            }
+                            return Err(AIError::Provider(format!("12AI Sync API error {}: {}", status, error_text)));
+                        }
+                        final_response = Some(body_bytes);
+                        break;
+                    }
+                    Err(e) => {
+                        last_err = Some(e);
+                        if attempt < max_retries {
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            let resp_bytes = final_response.ok_or_else(|| {
+                last_err.unwrap_or_else(|| AIError::Provider("Sync edit failed after retries".to_string()))
+            })?;
+
+            let result: TwelveAiSyncResponse = serde_json::from_slice(&resp_bytes).map_err(AIError::Json)?;
+            let item = result.data.into_iter().next()
+                .ok_or_else(|| AIError::Provider("Sync API response missing data".to_string()))?;
+
+            if let Some(url) = item.url {
+                if !url.is_empty() {
+                    return Ok(url);
+                }
+            }
+            if let Some(b64) = item.b64_json {
+                if !b64.is_empty() {
+                    let decoded = base64::engine::general_purpose::STANDARD
+                        .decode(&b64)
+                        .map_err(|e| AIError::Provider(format!("Failed to decode base64 image: {}", e)))?;
+                    let temp_dir = std::env::temp_dir();
+                    let filename = format!("12ai_sync_{}.png", uuid::Uuid::new_v4());
+                    let temp_path = temp_dir.join(&filename);
+                    std::fs::write(&temp_path, &decoded)
+                        .map_err(|e| AIError::Provider(format!("Failed to save temp image: {}", e)))?;
+                    return Ok(temp_path.to_string_lossy().to_string());
+                }
+            }
+            return Err(AIError::Provider("Sync edit response missing both url and b64_json".to_string()));
         } else {
             let body = TwelveAiGenerationRequestBody {
                 model: model.to_string(),
