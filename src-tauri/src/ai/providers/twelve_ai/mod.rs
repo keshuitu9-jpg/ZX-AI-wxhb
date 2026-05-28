@@ -377,12 +377,13 @@ impl TwelveAiProvider {
         };
 
         let (width, height) = (img.width(), img.height());
-        let max_dim = 1024; // 进一步限制参考图最大边长为 1024px，减少 502 风险
+        let max_dim = 768; // 限制参考图最大边长为 768px，减少上传截断风险
+        let max_size = 800 * 1024; // 最大 800KB
 
-        if width > max_dim || height > max_dim || bytes.len() > 1024 * 1024 {
+        if width > max_dim || height > max_dim || bytes.len() > max_size {
             let resized = img.thumbnail(max_dim, max_dim);
             let mut buf = Vec::new();
-            // 使用 JPEG 85% 质量压缩，能显著减小体积
+            // 使用 JPEG 75% 质量压缩，显著减小体积
             if let Err(e) = resized.write_to(&mut Cursor::new(&mut buf), ImageFormat::Jpeg) {
                 warn!("[12AI] Failed to compress image: {}", e);
                 return Ok(bytes);
