@@ -842,43 +842,75 @@ impl TwelveAiProvider {
             model_owned, size_owned, quality_owned, reference_images.len(), total_size
         );
 
-        let response = self.send_with_fallback("async-edit", |client| {
-            let mut request_form = Form::new()
-                .text("model", model_owned.clone())
-                .text("prompt", prompt_owned.clone())
-                .text("size", size_owned.clone())
-                .text("quality", quality_owned.clone())
-                .text("n", "1");
+        // 带重试的异步编辑提交（网络不稳定时 unexpected EOF 会自动重试）
+        let max_retries = 2;
+        let mut last_error = String::new();
 
-            for (i, (_original_index, bytes)) in image_payloads.iter().enumerate() {
-                let key = "image";
-                let part = Part::bytes(bytes.clone())
-                    .file_name(format!("{}-{}.jpg", key, i + 1))
-                    .mime_str("image/jpeg")
-                    .expect("Valid hardcoded mime type");
-                request_form = request_form.part(key, part);
+        for attempt in 0..=max_retries {
+            if attempt > 0 {
+                info!("[12AI Async] Retrying edit submission (attempt {}/{})", attempt + 1, max_retries + 1);
+                tokio::time::sleep(Duration::from_secs(2)).await;
             }
 
-            client
-                .post(&endpoint)
-                .header("Authorization", format!("Bearer {}", api_key))
-                .header("Accept", "application/json")
-                .multipart(request_form)
-        })
-        .await?;
+            let response = self.send_with_fallback("async-edit", |client| {
+                let mut request_form = Form::new()
+                    .text("model", model_owned.clone())
+                    .text("prompt", prompt_owned.clone())
+                    .text("size", size_owned.clone())
+                    .text("quality", quality_owned.clone())
+                    .text("n", "1");
 
-        let status = response.status();
-        let bytes = response.bytes().await.map_err(AIError::Network)?;
+                for (i, (_original_index, bytes)) in image_payloads.iter().enumerate() {
+                    let key = "image";
+                    let part = Part::bytes(bytes.clone())
+                        .file_name(format!("{}-{}.jpg", key, i + 1))
+                        .mime_str("image/jpeg")
+                        .expect("Valid hardcoded mime type");
+                    request_form = request_form.part(key, part);
+                }
 
-        if !status.is_success() {
-            let error_text = String::from_utf8_lossy(&bytes).to_string();
-            return Err(AIError::Provider(format!(
-                "12AI Async edit submission error {}: {}",
-                status, error_text
-            )));
+                client
+                    .post(&endpoint)
+                    .header("Authorization", format!("Bearer {}", api_key))
+                    .header("Accept", "application/json")
+                    .multipart(request_form)
+            })
+            .await;
+
+            let response = match response {
+                Ok(r) => r,
+                Err(e) => {
+                    last_error = e.to_string();
+                    if attempt < max_retries {
+                        continue;
+                    }
+                    return Err(e);
+                }
+            };
+
+            let status = response.status();
+            let bytes = response.bytes().await.map_err(AIError::Network)?;
+
+            if !status.is_success() {
+                let error_text = String::from_utf8_lossy(&bytes).to_string();
+                // 如果是 EOF 或网络相关错误，重试
+                if (error_text.contains("unexpected EOF") || error_text.contains("connection")) && attempt < max_retries {
+                    last_error = error_text;
+                    continue;
+                }
+                return Err(AIError::Provider(format!(
+                    "12AI Async edit submission error {}: {}",
+                    status, error_text
+                )));
+            }
+
+            return serde_json::from_slice(&bytes).map_err(AIError::Json);
         }
 
-        serde_json::from_slice(&bytes).map_err(AIError::Json)
+        Err(AIError::Provider(format!(
+            "12AI Async edit failed after {} retries: {}",
+            max_retries, last_error
+        )))
     }
 
     async fn generate_gpt_image_sync(
