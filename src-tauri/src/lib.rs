@@ -115,23 +115,10 @@ pub fn run() {
 
             #[cfg(target_os = "macos")]
             {
-                let mut mac_window_config = window_config;
-                // Window effects radius only works for transparent windows on macOS.
-                mac_window_config.transparent = true;
-
-                let window = tauri::WebviewWindowBuilder::from_config(app, &mac_window_config)?.build()?;
+                let window = tauri::WebviewWindowBuilder::from_config(app, &window_config)?.build()?;
 
                 if let Err(err) = window.hide() {
                     warn!("failed to hide main window on startup: {err}");
-                }
-
-                if let Err(err) = window.set_effects(Some(
-                    tauri::window::EffectsBuilder::new()
-                        .effect(tauri::window::Effect::Titlebar)
-                        .radius(10.0)
-                        .build(),
-                )) {
-                    warn!("failed to apply macOS window effects: {err}");
                 }
             }
 

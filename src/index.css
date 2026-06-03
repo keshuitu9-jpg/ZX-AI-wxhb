@@ -123,11 +123,6 @@ body {
   font-family: var(--font-family-ui-default);
 }
 
-html[data-platform='macos'],
-html[data-platform='macos'] body {
-  background: transparent;
-}
-
 html[data-platform='macos'] body,
 html[data-platform='macos'] #boot-screen {
   font-family: var(--font-family-ui-macos);
