@@ -67,7 +67,11 @@ import { CanvasNodeImage } from '@/features/canvas/ui/CanvasNodeImage';
 import { NodePriceBadge } from '@/features/canvas/ui/NodePriceBadge';
 import { UiButton } from '@/components/ui';
 import { useCanvasStore } from '@/stores/canvasStore';
-import { resolveProviderRequestModel, useSettingsStore } from '@/stores/settingsStore';
+import {
+  resolveProviderApiKey,
+  resolveProviderRequestModel,
+  useSettingsStore,
+} from '@/stores/settingsStore';
 
 type ImageEditNodeProps = NodeProps & {
   id: string;
@@ -276,9 +280,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
     const modelId = data.model ?? DEFAULT_IMAGE_MODEL_ID;
     return getImageModel(modelId);
   }, [data.model]);
-  const providerApiKey = providerConfigs[selectedModel.providerId]?.apiKey
-    ?? apiKeys[selectedModel.providerId]
-    ?? '';
+  const providerApiKey = resolveProviderApiKey(selectedModel.providerId, providerConfigs, apiKeys);
   const providerBaseUrl = providerConfigs[selectedModel.providerId]?.baseUrl ?? '';
   const providerModelOverride = providerConfigs[selectedModel.providerId]?.model ?? '';
   const effectiveExtraParams = useMemo(() => data.extraParams ?? {}, [data.extraParams]);

@@ -25,7 +25,11 @@ import {
 } from '@/features/canvas/domain/canvasNodes';
 import { EXPORT_RESULT_DISPLAY_NAME, resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import { useCanvasStore } from '@/stores/canvasStore';
-import { resolveProviderRequestModel, useSettingsStore } from '@/stores/settingsStore';
+import {
+  resolveProviderApiKey,
+  resolveProviderRequestModel,
+  useSettingsStore,
+} from '@/stores/settingsStore';
 import {
   canvasAiGateway,
   graphImageResolver,
@@ -618,9 +622,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     const modelId = nodeData.model ?? DEFAULT_IMAGE_MODEL_ID;
     return getImageModel(modelId);
   }, [nodeData.model]);
-  const providerApiKey = providerConfigs[selectedModel.providerId]?.apiKey
-    ?? apiKeys[selectedModel.providerId]
-    ?? '';
+  const providerApiKey = resolveProviderApiKey(selectedModel.providerId, providerConfigs, apiKeys);
   const providerBaseUrl = providerConfigs[selectedModel.providerId]?.baseUrl ?? '';
   const providerModelOverride = providerConfigs[selectedModel.providerId]?.model ?? '';
   const effectiveExtraParams = useMemo(() => nodeData.extraParams ?? {}, [nodeData.extraParams]);

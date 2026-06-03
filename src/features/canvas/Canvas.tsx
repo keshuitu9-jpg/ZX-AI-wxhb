@@ -28,6 +28,7 @@ import { useCanvasStore } from '@/stores/canvasStore';
 import { useProjectStore } from '@/stores/projectStore';
 import {
   getConfiguredApiKeyCount,
+  resolveProviderApiKey,
   resolveProviderRequestModel,
   useSettingsStore,
 } from '@/stores/settingsStore';
@@ -453,7 +454,7 @@ export function Canvas() {
               const providerConfig = providerConfigs[generationProviderId];
               await canvasAiGateway.setProviderConfig({
                 provider: generationProviderId,
-                apiKey: providerConfig?.apiKey ?? apiKeys[generationProviderId] ?? '',
+                apiKey: resolveProviderApiKey(generationProviderId, providerConfigs, apiKeys),
                 baseUrl: providerConfig?.baseUrl ?? '',
                 model: resolveProviderRequestModel(
                   generationProviderId,

@@ -26,6 +26,15 @@ const SUPPORTED_PROVIDER_IDS = [
   '12ai-veo',
 ] as const;
 
+const SHARED_12AI_PROVIDER_IDS = [
+  '12ai-gpt-image',
+  '12ai-gemini-image',
+  '12ai-text',
+  '12ai-gpt-5-5',
+  '12ai-claude',
+  '12ai-veo',
+] as const;
+
 const DEFAULT_PROVIDER_API_KEYS: Record<(typeof SUPPORTED_PROVIDER_IDS)[number], string> = {
   '12ai-text': '',
   '12ai-gpt-5-5': '',
@@ -261,6 +270,31 @@ export function resolveProviderRequestModel(
   return configuredModel.startsWith(prefix)
     ? configuredModel
     : `${prefix}${configuredModel}`;
+}
+
+export function resolveProviderApiKey(
+  providerId: string,
+  providerConfigs: ProviderRuntimeConfigMap | null | undefined,
+  apiKeys: ProviderApiKeys | null | undefined
+): string {
+  const directKey = normalizeApiKey(providerConfigs?.[providerId]?.apiKey ?? apiKeys?.[providerId] ?? '');
+  if (directKey || !providerId.startsWith('12ai-')) {
+    return directKey;
+  }
+
+  for (const sharedProviderId of SHARED_12AI_PROVIDER_IDS) {
+    if (sharedProviderId === providerId) {
+      continue;
+    }
+    const sharedKey = normalizeApiKey(
+      providerConfigs?.[sharedProviderId]?.apiKey ?? apiKeys?.[sharedProviderId] ?? ''
+    );
+    if (sharedKey) {
+      return sharedKey;
+    }
+  }
+
+  return '';
 }
 
 export function hasConfiguredApiKey(apiKeys: ProviderApiKeys): boolean {

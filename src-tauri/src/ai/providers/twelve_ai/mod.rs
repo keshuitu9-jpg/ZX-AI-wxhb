@@ -307,6 +307,16 @@ impl TwelveAiProvider {
         }
     }
 
+    fn provider_api_error(context: &str, status: reqwest::StatusCode, error_text: String) -> AIError {
+        if status == reqwest::StatusCode::UNAUTHORIZED || error_text.contains("Invalid token") {
+            return AIError::Provider(
+                "12AI API Key is invalid or expired. Please check and update the 12AI API Key in Settings.".to_string(),
+            );
+        }
+
+        AIError::Provider(format!("{} {}: {}", context, status, error_text))
+    }
+
     fn extract_quality(request: &GenerateRequest) -> String {
         let quality = request
             .extra_params
@@ -803,10 +813,7 @@ impl TwelveAiProvider {
 
         if !status.is_success() {
             let error_text = String::from_utf8_lossy(&bytes).to_string();
-            return Err(AIError::Provider(format!(
-                "12AI Async submission error {}: {}",
-                status, error_text
-            )));
+            return Err(Self::provider_api_error("12AI Async submission error", status, error_text));
         }
 
         serde_json::from_slice(&bytes).map_err(AIError::Json)
@@ -908,10 +915,11 @@ impl TwelveAiProvider {
                     last_error = error_text;
                     continue;
                 }
-                return Err(AIError::Provider(format!(
-                    "12AI Async edit submission error {}: {}",
-                    status, error_text
-                )));
+                return Err(Self::provider_api_error(
+                    "12AI Async edit submission error",
+                    status,
+                    error_text,
+                ));
             }
 
             return serde_json::from_slice(&bytes).map_err(AIError::Json);
